@@ -11,6 +11,8 @@ import java.nio.channels.SocketChannel;
 import java.util.Iterator;
 import java.util.Set;
 
+import javax.net.ssl.SSLEngine;
+
 import net.tootallnate.websocket.drafts.Draft_10;
 import net.tootallnate.websocket.exeptions.InvalidHandshakeException;
 
@@ -47,6 +49,8 @@ public abstract class WebSocketClient extends WebSocketAdapter implements Runnab
 	private Thread thread;
 
 	private Draft draft;
+	
+	SSLEngine ssl;
 
 	// CONSTRUCTORS ////////////////////////////////////////////////////////////
 	public WebSocketClient( URI serverURI ) {

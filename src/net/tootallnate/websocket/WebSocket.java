@@ -12,6 +12,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import javax.naming.LimitExceededException;
+import javax.net.ssl.SSLException;
 
 import net.tootallnate.websocket.Draft.HandshakeState;
 import net.tootallnate.websocket.Framedata.Opcode;
@@ -44,7 +45,7 @@ public final class WebSocket {
 	 * constructor is used, DEFAULT_PORT will be the port the WebSocketServer
 	 * is binded to. Note that ports under 1024 usually require root permissions.
 	 */
-	public static final int DEFAULT_PORT = 80;
+	public static final int DEFAULT_PORT = 443;
 
 	public static/*final*/boolean DEBUG = false; // must be final in the future in order to take advantage of VM optimization
 
@@ -80,7 +81,7 @@ public final class WebSocket {
 
 	private int flash_policy_index = 0;
 
-	private SocketChannel sockchannel;
+	private ChannelWrapper sockchannel;
 
 	// CONSTRUCTOR /////////////////////////////////////////////////////////////
 	/**
@@ -95,12 +96,11 @@ public final class WebSocket {
 	 *            they occur.
 	 */
 	public WebSocket( WebSocketListener listener , Draft draft , SocketChannel sockchannel ) {
-		init( listener, draft, sockchannel );
+		init( listener, draft, sockchannel, Role.CLIENT );
 	}
 
 	public WebSocket( WebSocketListener listener , List<Draft> drafts , SocketChannel sockchannel ) {
-		init( listener, null, sockchannel );
-		this.role = Role.SERVER;
+		init( listener, null, sockchannel, Role.SERVER );
 		if( known_drafts == null || known_drafts.isEmpty() ) {
 			known_drafts = new ArrayList<Draft>( 1 );
 			known_drafts.add( new Draft_17() );
@@ -112,14 +112,18 @@ public final class WebSocket {
 		}
 	}
 
-	private void init( WebSocketListener listener, Draft draft, SocketChannel sockchannel ) {
-		this.sockchannel = sockchannel;
+	private void init( WebSocketListener listener, Draft draft, SocketChannel sockchannel, Role role ) {
+		try {
+			this.sockchannel = new ChannelWrapper( sockchannel, role == Role.CLIENT );
+		} catch ( SSLException e ) {
+			throw new RuntimeException( e );
+		}
 		this.bufferQueue = new LinkedBlockingQueue<ByteBuffer>( 10 );
 		this.handshakeComplete = false;
 		this.socketBuffer = ByteBuffer.allocate( 65558 );
 		socketBuffer.flip();
 		this.wsl = listener;
-		this.role = Role.CLIENT;
+		this.role = role;
 		this.draft = draft;
 	}
 
@@ -338,7 +342,7 @@ public final class WebSocket {
 		while ( buffer != null ) {
 			sockchannel.write( buffer );
 			if( buffer.remaining() > 0 ) {
-				continue;
+				return;
 			} else {
 				this.bufferQueue.poll(); // Buffer finished. Remove it.
 				buffer = this.bufferQueue.peek();
@@ -388,11 +392,11 @@ public final class WebSocket {
 	}
 
 	public InetSocketAddress getRemoteSocketAddress() {
-		return (InetSocketAddress) sockchannel.socket().getRemoteSocketAddress();
+		return (InetSocketAddress) sockchannel.getRemoteSocketAddress();
 	}
 
 	public InetSocketAddress getLocalSocketAddress() {
-		return (InetSocketAddress) sockchannel.socket().getLocalSocketAddress();
+		return (InetSocketAddress) sockchannel.getLocalSocketAddress();
 	}
 
 	@Override
@@ -401,3 +405,5 @@ public final class WebSocket {
 	}
 
 }
+
+

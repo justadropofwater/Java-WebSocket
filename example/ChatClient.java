@@ -3,7 +3,6 @@ import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowEvent;
-import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 
@@ -158,7 +157,7 @@ public class ChatClient extends JFrame implements ActionListener {
 			location = args[ 0 ];
 			System.out.println( "Default server url specified: \'" + location + "\'" );
 		} else {
-			location = "ws://localhost:8887";
+			location = "wss://localhost:8887";
 			System.out.println( "Default server url not specified: defaulting to \'" + location + "\'" );
 		}
 		new ChatClient( location );
