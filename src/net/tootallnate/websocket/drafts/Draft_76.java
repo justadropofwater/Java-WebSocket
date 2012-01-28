@@ -1,5 +1,6 @@
 package net.tootallnate.websocket.drafts;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -9,6 +10,8 @@ import java.util.Random;
 import net.tootallnate.websocket.HandshakeBuilder;
 import net.tootallnate.websocket.Handshakedata;
 import net.tootallnate.websocket.HandshakedataImpl1;
+import net.tootallnate.websocket.WebSocket.Role;
+import net.tootallnate.websocket.exeptions.IncompleteHandshakeException;
 import net.tootallnate.websocket.exeptions.InvalidHandshakeException;
 
 public class Draft_76 extends Draft_75 {
@@ -116,7 +119,7 @@ public class Draft_76 extends Draft_75 {
 	@Override
 	public HandshakeState acceptHandshakeAsServer( Handshakedata handshakedata ) {
 
-		if( handshakedata.getFieldValue( "Upgrade" ).equals( "WebSocket" ) && handshakedata.getFieldValue( "Connection" ).contains( "Upgrade" ) && !handshakedata.getFieldValue( "Sec-WebSocket-Key1" ).isEmpty() && !handshakedata.getFieldValue( "Sec-WebSocket-Key2" ).isEmpty() && handshakedata.hasFieldValue( "Origin" )
+		if( handshakedata.getFieldValue( "Upgrade" ).equals( "WebSocket" ) && handshakedata.getFieldValue( "Connection" ).contains( "Upgrade" ) && handshakedata.getFieldValue( "Sec-WebSocket-Key1" ).length() > 0 && !handshakedata.getFieldValue( "Sec-WebSocket-Key2" ).isEmpty() && handshakedata.hasFieldValue( "Origin" )
 		/*new String ( handshakedata.getContent () ).endsWith ( "\r\n\r\n" )*/)
 			return HandshakeState.MATCHED;
 		return HandshakeState.NOT_MATCHED;
@@ -155,16 +158,12 @@ public class Draft_76 extends Draft_75 {
 	@Override
 	public Handshakedata translateHandshake( ByteBuffer buf ) throws InvalidHandshakeException {
 		HandshakeBuilder bui = translateHandshakeHttp( buf );
-		ByteBuffer key3buf = readLine( buf );
-		byte[] key3;
-		if( key3buf == null ){
-			key3 = new byte[0];
+		byte[] key3 = new byte[role==Role.SERVER?8:16];
+		try {
+			buf.get( key3 );
+		} catch ( BufferUnderflowException e ) {
+			throw new IncompleteHandshakeException();
 		}
-		else{
-			key3 = new byte[ key3buf.remaining() ];
-			key3buf.get( key3 );
-		}
-		// key3 have to be 16 bytes long
 		bui.setContent( key3 );
 		return bui;
 	}
