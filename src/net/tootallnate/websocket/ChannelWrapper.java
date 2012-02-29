@@ -40,6 +40,8 @@ class ChannelWrapper {
 	/**encoded outgoing data*/
 	private ByteBuffer outdest;
 	
+	private int lastreadcount;
+	
 	/** Whether this peer acts as client*/
 	private boolean clientmode;
 	
@@ -54,25 +56,22 @@ class ChannelWrapper {
 	}
 	
 	/**If there is a handshake to be processed this method does it and returns false*/
-	private boolean ensureHandshakeWrap(ByteBuffer fromuser ) throws SSLException,IOException{
+	private boolean processWrap(ByteBuffer fromuser ) throws SSLException,IOException{
 		HandshakeStatus status = sslEngine.getHandshakeStatus();
 		if( status == HandshakeStatus.NOT_HANDSHAKING){
-			return true;
+			System.out.println("handshake finished");
 		}
-		//process handshake
-		System.out.println("wrap for handshake: ");
 		SSLEngineResult res = wrap( fromuser  );
 		writeSocketAll( outdest );
 		outdest.clear();
 		return false;
 	}
 	
-	private boolean ensureHandshakeUnWrap( ByteBuffer foruser) throws SSLException, IOException, ClosedException{
+	private void processUnWrap( ByteBuffer foruser) throws SSLException, IOException, ClosedException{
 		HandshakeStatus status = sslEngine.getHandshakeStatus();
 		if( status == HandshakeStatus.NOT_HANDSHAKING){
-			return true;
+			System.out.println("handshake finished");
 		}
-		
 		SSLEngineResult res = unwrap( foruser );
 		switch ( res.getHandshakeStatus() ) {
 			case NEED_TASK:
@@ -81,8 +80,7 @@ class ChannelWrapper {
 			default :
 				break;
 		}
-		ensureHandshakeWrap(emptybb);
-		return false;
+		processWrap(emptybb);
 	}
 	
 	private void provideTask(){
@@ -146,34 +144,38 @@ class ChannelWrapper {
 	}
 	
 	private SSLEngineResult unwrap( ByteBuffer userdatabuf ) throws SSLException,IOException, ClosedException{
-		System.out.println("unwrap:");
-		
 		readSocket( insrc );
 		insrc.flip();
-		
-		//indest.rewind();
-		insrc.mark();
 		SSLEngineResult res = sslEngine.unwrap( insrc, userdatabuf );
 		Status s = res.getStatus();
 		if( s == Status.OK)
 			return res;
 		else if( s == Status.BUFFER_OVERFLOW ){
-			System.out.println("wrap BUFFER_OVERFLOW");
+			System.out.println("BUFFER_OVERFLOW");
 		}
 		else if( s == Status.BUFFER_UNDERFLOW ){
-			System.out.println("wrap BUFFER_UNDERFLOW");
+			if(!insrc.hasRemaining()){
+				System.out.println("wrap BUFFER_UNDERFLOW");
+			}
+			else{
+				insrc.position( insrc.limit() );
+				insrc.limit( insrc.capacity() );
+			}
 		}
 		return res;
 	}
 	
 	
 	public int read(ByteBuffer userdata) throws IOException{
+		int pos1=userdata.position();
 		try {
 			System.out.println("read: ");
-			if(!ensureInit() || !ensureHandshakeUnWrap( userdata)){
+			if(!ensureInit()){
 				return 0;
 			}
-			return 0;
+			processUnWrap( userdata);
+			System.out.println("read state:"+sslEngine.getHandshakeStatus()+lastreadcount);
+			return userdata.position()-pos1;
 		} catch ( ClosedException e ) {
 			return -1;
 		}
@@ -181,13 +183,16 @@ class ChannelWrapper {
 	
 	public int write(ByteBuffer buffer) throws IOException{
 		System.out.println("write: ");
-		if(!ensureInit()||!ensureHandshakeWrap(buffer )){
+		if(!ensureInit()){
 			return 0;
 		}
-		SSLEngineResult res= wrap( buffer );
-
-	
-		return channel.write( buffer );
+		while(sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP){
+			processWrap(buffer );
+		}
+		processWrap(buffer );
+		int rem = buffer.remaining();
+		System.out.println("write state:"+sslEngine.getHandshakeStatus()+lastreadcount);
+		return rem-buffer.remaining();
 	}
 	
 	private void writeSocketAll(ByteBuffer b) throws IOException{
@@ -198,9 +203,9 @@ class ChannelWrapper {
 	}
 	
 	private void readSocket(ByteBuffer b) throws IOException, ClosedException{
-		int count = channel.read( b );
+		lastreadcount = channel.read( b );
 		//System.out.println("SOcketwrite:"+new String( b.array(), 0, b.position() ));
-		if(count == -1){
+		if(lastreadcount == -1){
 			channel.close();
 			throw new ClosedException();
 		}
@@ -245,12 +250,10 @@ class ChannelWrapper {
 		return sslContext;
 	}
 	class TrustAll extends TrustManagerFactory{
-
 		protected TrustAll( TrustManagerFactorySpi factorySpi , Provider provider , String algorithm ) {
 			super( factorySpi, provider, algorithm );
 			// TODO Auto-generated constructor stub
 		}
-		
 	}
 	
 }

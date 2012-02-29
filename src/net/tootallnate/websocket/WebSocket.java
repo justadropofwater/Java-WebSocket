@@ -20,7 +20,6 @@ import net.tootallnate.websocket.drafts.Draft_10;
 import net.tootallnate.websocket.drafts.Draft_17;
 import net.tootallnate.websocket.drafts.Draft_75;
 import net.tootallnate.websocket.drafts.Draft_76;
-import net.tootallnate.websocket.exeptions.IncompleteHandshakeException;
 import net.tootallnate.websocket.exeptions.InvalidDataException;
 import net.tootallnate.websocket.exeptions.InvalidFrameException;
 import net.tootallnate.websocket.exeptions.InvalidHandshakeException;
@@ -135,6 +134,7 @@ public final class WebSocket {
 	 * @throws IOException
 	 *             When socket related I/O errors occur.
 	 * @throws InterruptedException
+	 * @throws LimitExceededException
 	 */
 	public void handleRead() throws InterruptedException , IOException {
 		if( !socketBuffer.hasRemaining() ) {
@@ -164,34 +164,21 @@ public final class WebSocket {
 					if( role == Role.SERVER ) {
 						if( draft == null ) {
 							for( Draft d : known_drafts ) {
-								try {
-									d.setParseMode( role );
-									socketBuffer.reset();
-									handshake = d.translateHandshake( socketBuffer );
-									handshakestate = d.acceptHandshakeAsServer( handshake );
-									if( handshakestate == HandshakeState.MATCHED ) {
-										HandshakeBuilder response = wsl.onHandshakeRecievedAsServer( this, d, handshake );
-										channelWrite( d.createHandshake( d.postProcessHandshakeResponseAsServer( handshake, response ), role ) );
-										draft = d;
-										open();
-										handleRead();
-										return;
-									} else if( handshakestate == HandshakeState.MATCHING ) {
-										if( draft != null ) {
-											throw new InvalidHandshakeException( "multible drafts matching" );
-										}
-										draft = d;
-									}
-								} catch ( InvalidHandshakeException e ) {
-									// go on with an other draft
-								} catch ( IncompleteHandshakeException e ) {
-									if( socketBuffer.limit() == socketBuffer.capacity() ) {
-										abort( "socketBuffer to small" );
-									}
-									// read more bytes for the handshake
-									socketBuffer.position( socketBuffer.limit() );
-									socketBuffer.limit( socketBuffer.capacity() );
+								socketBuffer.reset();
+								handshake = d.translateHandshake( socketBuffer );
+								handshakestate = d.acceptHandshakeAsServer( handshake );
+								if( handshakestate == HandshakeState.MATCHED ) {
+									HandshakeBuilder response = wsl.onHandshakeRecievedAsServer( this, d, handshake );
+									channelWrite( d.createHandshake( d.postProcessHandshakeResponseAsServer( handshake, response ), role ) );
+									draft = d;
+									this.handshakeComplete = true;
+									open();
 									return;
+								} else if( handshakestate == HandshakeState.MATCHING ) {
+									if( draft != null ) {
+										throw new InvalidHandshakeException( "multible drafts matching" );
+									}
+									draft = d;
 								}
 							}
 							if( draft == null ) {
@@ -205,19 +192,17 @@ public final class WebSocket {
 
 							if( handshakestate == HandshakeState.MATCHED ) {
 								open();
-								handleRead();
 							} else if( handshakestate != HandshakeState.MATCHING ) {
 								abort( "the handshake did finaly not match" );
 							}
 							return;
 						}
 					} else if( role == Role.CLIENT ) {
-						draft.setParseMode( role );
 						handshake = draft.translateHandshake( socketBuffer );
 						handshakestate = draft.acceptHandshakeAsClient( handshakerequest, handshake );
 						if( handshakestate == HandshakeState.MATCHED ) {
+							this.handshakeComplete = true;
 							open();
-							handleRead();
 						} else if( handshakestate == HandshakeState.MATCHING ) {
 							return;
 						} else {
