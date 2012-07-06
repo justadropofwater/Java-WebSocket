@@ -49,7 +49,7 @@
 
         self = this
 
-        self.id = PhoneGap.exec(null,
+        self.id = Cordova.exec(null,
             null,
             'WebSocket',
             'create',
@@ -57,7 +57,7 @@
 
         WebSocket.store[self.id] = this
 
-        PhoneGap.exec(null,
+        Cordova.exec(null,
             null,
             'WebSocket',
             'connect',
@@ -87,7 +87,7 @@
 
     // instance event methods
     WebSocket.prototype.send = function (data) {
-        PhoneGap.exec(null,
+        Cordova.exec(null,
             null,
             'WebSocket',
             'send',
@@ -95,7 +95,7 @@
     }
 
     WebSocket.prototype.close = function () {
-        PhoneGap.exec(null,
+        Cordova.exec(null,
             null,
             'WebSocket',
             'close',
@@ -104,7 +104,7 @@
     }
 
     WebSocket.prototype.getReadyState = function () {
-        return PhoneGap.exec(null,
+        return Cordova.exec(null,
             null,
             'WebSocket',
             'getReadyState',
